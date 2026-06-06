@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
@@ -27,11 +29,40 @@ class _RegisterStep2ScreenState extends ConsumerState<RegisterStep2Screen> {
   final _addressCtrl = TextEditingController();
   final _mapController = MapController();
   String? _selectedRouteId;
+  LatLng? _userPosition;
 
   @override
   void initState() {
     super.initState();
     _addressCtrl.text = 'Av. Principal 123';
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+      ),
+    );
+    _initLocation();
+  }
+
+  Future<void> _initLocation() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
+    }
+    if (permission == LocationPermission.deniedForever) return;
+
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      if (!mounted) return;
+      setState(() => _userPosition = LatLng(pos.latitude, pos.longitude));
+      _mapController.move(_userPosition!, 15);
+    } catch (_) {}
   }
 
   @override
@@ -119,7 +150,7 @@ class _RegisterStep2ScreenState extends ConsumerState<RegisterStep2Screen> {
       children: [
         TileLayer(
           urlTemplate:
-              'https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/256/{z}/{x}/{y}@2x?access_token={accessToken}',
+              'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token={accessToken}',
           additionalOptions: {'accessToken': token},
           userAgentPackageName: 'com.example.eco_alerta',
         ),
@@ -143,6 +174,30 @@ class _RegisterStep2ScreenState extends ConsumerState<RegisterStep2Screen> {
               Marker(
                 point: polylinePoints.last,
                 child: const Icon(Icons.flag, color: AppColors.tertiary, size: 28),
+              ),
+            ],
+          ),
+        if (_userPosition != null)
+          MarkerLayer(
+            markers: [
+              Marker(
+                point: _userPosition!,
+                width: 24,
+                height: 24,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.blue.withValues(alpha: 0.9),
+                    border: Border.all(color: Colors.white, width: 3),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.blue.withValues(alpha: 0.35),
+                        blurRadius: 10,
+                        spreadRadius: 4,
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
