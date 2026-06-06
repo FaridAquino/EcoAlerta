@@ -5,6 +5,13 @@ allprojects {
     }
 }
 
+// Suppress obsolete Java 8 source/target warnings from transitive dependencies
+allprojects {
+    tasks.withType<JavaCompile>().configureEach {
+        options.compilerArgs.addAll(listOf("-Xlint:-options"))
+    }
+}
+
 val newBuildDir: Directory = rootProject.layout.buildDirectory.dir("../../build").get()
 rootProject.layout.buildDirectory.value(newBuildDir)
 

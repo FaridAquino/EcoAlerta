@@ -35,12 +35,6 @@ class _RegisterStep2ScreenState extends ConsumerState<RegisterStep2Screen> {
   void initState() {
     super.initState();
     _addressCtrl.text = 'Av. Principal 123';
-    SystemChrome.setSystemUIOverlayStyle(
-      const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
-      ),
-    );
     _initLocation();
   }
 
@@ -111,11 +105,18 @@ class _RegisterStep2ScreenState extends ConsumerState<RegisterStep2Screen> {
       }
     });
 
-    return Scaffold(
-      body: routesAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
-        data: (routes) => _buildContent(routes, isLoading),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+      ),
+      child: Scaffold(
+        body: routesAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => Center(child: Text('Error: $e')),
+          data: (routes) => _buildContent(routes, isLoading),
+        ),
       ),
     );
   }
@@ -315,6 +316,26 @@ class _RegisterStep2ScreenState extends ConsumerState<RegisterStep2Screen> {
     return Stack(
       children: [
         Positioned.fill(child: _mapWidget(polylinePoints, center)),
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          height: MediaQuery.of(context).padding.top + 8,
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.35),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
         Positioned(
           left: 0,
           right: 0,
