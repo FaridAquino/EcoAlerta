@@ -52,6 +52,10 @@ dependencies:
   flutter_dotenv: ^5.2.1
   # Fuentes
   google_fonts: ^6.2.1
+  flutter_local_notifications: ^20.1.0
+  alarm: ^5.1.5
+  flutter_foreground_task: ^9.2.2
+  timezone: ^0.10.1
 
 dev_dependencies:
   flutter_test:
@@ -76,6 +80,7 @@ flutter:
   assets:
     - .env
     - assets/data/routes.json
+    - assets/audio/alarm.wav
 
   # To add custom fonts to your application, add a fonts section here,
   # in this "flutter" section. Each entry in this list should have a
