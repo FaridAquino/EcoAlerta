@@ -1,14 +1,16 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../features/alerts/presentation/screens/alerts_screen.dart';
 import '../features/auth/presentation/screens/login_screen.dart';
 import '../features/auth/presentation/screens/register_step1_screen.dart';
 import '../features/auth/presentation/screens/register_step2_screen.dart';
 import '../features/auth/providers/auth_provider.dart';
+import '../features/home/presentation/screens/home_shell.dart';
+import '../features/routes/presentation/screens/routes_screen.dart';
+import '../features/schedule/presentation/screens/schedule_screen.dart';
+import '../features/track/presentation/screens/track_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final authNotifier = ref.watch(authProvider.notifier);
-
   return GoRouter(
     initialLocation: '/login',
     redirect: (context, state) async {
@@ -17,14 +19,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isAuthRoute = loc.startsWith('/login') || loc.startsWith('/register');
 
       if (!isLoggedIn && !isAuthRoute) return '/login';
-      if (isLoggedIn && isAuthRoute) return '/home';
+      if (isLoggedIn && isAuthRoute) return '/schedule';
       return null;
     },
     routes: [
-      GoRoute(
-        path: '/login',
-        builder: (_, __) => const LoginScreen(),
-      ),
+      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(
         path: '/register/step1',
         builder: (_, __) => const RegisterStep1Screen(),
@@ -39,45 +38,24 @@ final routerProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
-      GoRoute(
-        path: '/home',
-        builder: (_, __) => _HomeScreen(authNotifier: authNotifier),
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) =>
+            HomeShell(navigationShell: navigationShell),
+        branches: [
+          StatefulShellBranch(
+            routes: [GoRoute(path: '/track', builder: (_, __) => const TrackScreen())],
+          ),
+          StatefulShellBranch(
+            routes: [GoRoute(path: '/routes', builder: (_, __) => const RoutesScreen())],
+          ),
+          StatefulShellBranch(
+            routes: [GoRoute(path: '/alerts', builder: (_, __) => const AlertsScreen())],
+          ),
+          StatefulShellBranch(
+            routes: [GoRoute(path: '/schedule', builder: (_, __) => const ScheduleScreen())],
+          ),
+        ],
       ),
     ],
   );
 });
-
-class _HomeScreen extends ConsumerWidget {
-  final AuthNotifier authNotifier;
-  const _HomeScreen({required this.authNotifier});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAF6),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.eco, size: 64, color: Color(0xFF0F5238)),
-            const SizedBox(height: 16),
-            const Text(
-              'EcoAlerta',
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.w600, color: Color(0xFF0F5238)),
-            ),
-            const SizedBox(height: 8),
-            const Text('Inicio de sesión exitoso'),
-            const SizedBox(height: 24),
-            TextButton(
-              onPressed: () async {
-                await authNotifier.logout();
-                if (context.mounted) context.go('/login');
-              },
-              child: const Text('Cerrar sesión'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

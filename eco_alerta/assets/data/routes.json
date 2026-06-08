@@ -1,46 +1,44 @@
 {
   "routes": [
     {
-      "id": "zona-norte-sector-a",
-      "name": "Zona Norte - Sector A",
-      "schedule": ["Mar", "Jue", "Sab"],
-      "distanceKm": 0.4,
+      "id": "ruta_marini",
+      "name": "Ruta Marini",
+      "schedule": ["Lun", "Mié", "Vie"],
+      "distanceKm": 0.6,
       "graph": {
-        "start": "n1",
-        "end": "n4",
+        "start": "A",
+        "end": "D",
         "nodes": [
-          {"id": "n1", "label": "Av. Principal 100",  "lat": 19.4326, "lng": -99.1332},
-          {"id": "n2", "label": "Calle 1 Norte",      "lat": 19.4336, "lng": -99.1342},
-          {"id": "n3", "label": "Av. Reforma esq. 2", "lat": 19.4346, "lng": -99.1352},
-          {"id": "n4", "label": "Blvd. Ecológico",    "lat": 19.4356, "lng": -99.1362}
+          {"id": "A", "label": "1er Punto", "lat": -11.419556, "lng": -75.697665},
+          {"id": "B", "label": "2do Punto", "lat": -11.418940, "lng": -75.697676},
+          {"id": "C", "label": "3er Punto", "lat": -11.418789, "lng": -75.699746},
+          {"id": "D", "label": "4to Punto", "lat": -11.419409, "lng": -75.699832}
         ],
         "edges": [
-          {"from": "n1", "to": "n2"},
-          {"from": "n2", "to": "n3"},
-          {"from": "n3", "to": "n4"}
+          {"from": "A", "to": "B"},
+          {"from": "B", "to": "C"},
+          {"from": "C", "to": "D"}
         ]
       }
     },
     {
-      "id": "centro-sector-historico",
-      "name": "Centro - Sector Histórico",
-      "schedule": ["Lun", "Mie", "Vie"],
-      "distanceKm": 1.2,
+      "id": "ruta_san_ramon",
+      "name": "Ruta San Ramón",
+      "schedule": ["Mar", "Jue", "Sáb"],
+      "distanceKm": 0.7,
       "graph": {
-        "start": "n1",
-        "end": "n5",
+        "start": "A",
+        "end": "D",
         "nodes": [
-          {"id": "n1", "label": "Zócalo",              "lat": 19.4284, "lng": -99.1277},
-          {"id": "n2", "label": "Calle Moneda",        "lat": 19.4290, "lng": -99.1290},
-          {"id": "n3", "label": "Correo Mayor",        "lat": 19.4298, "lng": -99.1305},
-          {"id": "n4", "label": "5 de Febrero",        "lat": 19.4310, "lng": -99.1315},
-          {"id": "n5", "label": "Mesones esq. Rep.",   "lat": 19.4320, "lng": -99.1325}
+          {"id": "A", "label": "1er Punto", "lat": -11.411656, "lng": -75.682757},
+          {"id": "B", "label": "2do Punto", "lat": -11.410429, "lng": -75.682623},
+          {"id": "C", "label": "3er Punto", "lat": -11.410445, "lng": -75.684176},
+          {"id": "D", "label": "4to Punto", "lat": -11.408473, "lng": -75.684205}
         ],
         "edges": [
-          {"from": "n1", "to": "n2"},
-          {"from": "n2", "to": "n3"},
-          {"from": "n3", "to": "n4"},
-          {"from": "n4", "to": "n5"}
+          {"from": "A", "to": "B"},
+          {"from": "B", "to": "C"},
+          {"from": "C", "to": "D"}
         ]
       }
     }
