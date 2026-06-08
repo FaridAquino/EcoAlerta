@@ -33,6 +33,14 @@ class AuthLocalDatasource {
     return session != null;
   }
 
+  Future<Map<String, dynamic>?> getCurrentUser() async {
+    final email = await _storage.getSession();
+    if (email == null) return null;
+    final user = await _storage.getUser(email);
+    if (user == null) return null;
+    return {'email': email, ...user};
+  }
+
   Future<String?> getSession() => _storage.getSession();
 
   Future<void> saveSession(String email) => _storage.saveSession(email);

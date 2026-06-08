@@ -10,4 +10,7 @@ abstract class AuthRepository {
   });
   Future<bool> isLoggedIn();
   Future<void> logout();
+
+  /// Usuario de la sesión activa (con sus rutas/dirección), o `null` si no hay.
+  Future<User?> getCurrentUser();
 }

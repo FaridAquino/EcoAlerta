@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -28,8 +30,11 @@ class RegisterStep2Screen extends ConsumerStatefulWidget {
 class _RegisterStep2ScreenState extends ConsumerState<RegisterStep2Screen> {
   final _addressCtrl = TextEditingController();
   final _mapController = MapController();
-  String? _selectedRouteId;
+  final _cardKey = GlobalKey();
+  final Set<String> _addedRouteIds = {};
+  String? _visualizedRouteId;
   LatLng? _userPosition;
+  double _cardHeight = 0;
 
   @override
   void initState() {
@@ -39,24 +44,93 @@ class _RegisterStep2ScreenState extends ConsumerState<RegisterStep2Screen> {
   }
 
   Future<void> _initLocation() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return;
+    // Muestra rápido la última posición conocida (si existe) y luego refina.
+    try {
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null && mounted) {
+        setState(() => _userPosition = LatLng(last.latitude, last.longitude));
+        _moveToWithCardOffset(_userPosition!, 16);
+      }
+    } catch (_) {}
+
+    final pos = await _fetchCurrentPosition();
+    if (pos == null || !mounted) return;
+    setState(() => _userPosition = pos);
+    _moveToWithCardOffset(pos, 16);
+  }
+
+  /// Obtiene la posición actual del dispositivo gestionando los permisos.
+  Future<LatLng?> _fetchCurrentPosition() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return null;
 
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) return;
+      if (permission == LocationPermission.denied) return null;
     }
-    if (permission == LocationPermission.deniedForever) return;
+    if (permission == LocationPermission.deniedForever) return null;
 
     try {
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
-      if (!mounted) return;
-      setState(() => _userPosition = LatLng(pos.latitude, pos.longitude));
-      _mapController.move(_userPosition!, 15);
-    } catch (_) {}
+      return LatLng(pos.latitude, pos.longitude);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Vuelve a centrar el mapa en la ubicación actual del usuario ("donde me
+  /// encuentro ahora"), desplazándola hacia arriba para que no la tape la tarjeta.
+  Future<void> _recenterOnUser() async {
+    // Centra de inmediato en la última posición conocida para evitar la espera
+    // del fix GPS; luego refina en segundo plano.
+    if (_userPosition != null) _moveToWithCardOffset(_userPosition!, 16);
+    final pos = await _fetchCurrentPosition();
+    if (pos == null || !mounted) return;
+    setState(() => _userPosition = pos);
+    _moveToWithCardOffset(pos, 16);
+  }
+
+  /// Mueve la cámara a [target] reproyectando el punto algunos píxeles hacia
+  /// arriba (la mitad de la altura de la tarjeta) para que quede visible.
+  void _moveToWithCardOffset(LatLng target, double zoom) {
+    _mapController.move(target, zoom);
+    if (_cardHeight <= 0) return;
+    final camera = _mapController.camera;
+    final pt = camera.latLngToScreenPoint(target);
+    final shifted = camera.pointToLatLng(math.Point(pt.x, pt.y + _cardHeight / 2));
+    _mapController.move(shifted, zoom);
+  }
+
+  /// Encuadra la ruta completa dejando espacio inferior igual a la tarjeta.
+  void _fitRoute(CollectionRoute route) {
+    final pts = route.orderedNodes.map((n) => LatLng(n.lat, n.lng)).toList();
+    if (pts.isEmpty) return;
+    if (pts.length == 1) {
+      _moveToWithCardOffset(pts.first, 16);
+      return;
+    }
+    _mapController.fitCamera(
+      CameraFit.coordinates(
+        coordinates: pts,
+        padding: EdgeInsets.only(
+          top: MediaQuery.of(context).padding.top + 24,
+          bottom: _cardHeight + 24,
+          left: 32,
+          right: 32,
+        ),
+      ),
+    );
+  }
+
+  /// Mide la altura real de la tarjeta inferior tras el layout.
+  void _measureCard() {
+    final box = _cardKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final h = box.size.height;
+    if (h != _cardHeight) setState(() => _cardHeight = h);
   }
 
   @override
@@ -67,31 +141,37 @@ class _RegisterStep2ScreenState extends ConsumerState<RegisterStep2Screen> {
   }
 
   Future<void> _finish(List<CollectionRoute> routes) async {
-    if (_selectedRouteId == null) {
+    if (_addedRouteIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Selecciona una ruta de recolección')),
+        const SnackBar(content: Text('Agrega al menos una ruta de recolección')),
       );
       return;
     }
     final ok = await ref.read(authProvider.notifier).register(
           email: widget.email,
           password: widget.password,
-          routeId: _selectedRouteId!,
+          routeId: _addedRouteIds.join(','),
           address: _addressCtrl.text.trim(),
         );
-    if (ok && mounted) {
+    if (!ok || !mounted) return;
+
+    // Auto-inicia sesión y entra directo al calendario.
+    final loggedIn =
+        await ref.read(authProvider.notifier).login(widget.email, widget.password);
+    if (loggedIn && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Cuenta creada. Inicia sesión.'),
+          content: Text('¡Cuenta creada! Bienvenido a EcoAlerta.'),
           backgroundColor: AppColors.primaryContainer,
         ),
       );
-      context.go('/login');
+      context.go('/schedule');
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measureCard());
     final routesAsync = ref.watch(routesProvider);
     final authState = ref.watch(authProvider);
     final isLoading = authState is AuthLoading;
@@ -122,7 +202,7 @@ class _RegisterStep2ScreenState extends ConsumerState<RegisterStep2Screen> {
   }
 
   Widget _buildContent(List<CollectionRoute> routes, bool isLoading) {
-    final selected = routes.where((r) => r.id == _selectedRouteId).firstOrNull;
+    final selected = routes.where((r) => r.id == _visualizedRouteId).firstOrNull;
     final polylinePoints = selected != null
         ? selected.orderedNodes
             .map((n) => LatLng(n.lat, n.lng))
@@ -208,8 +288,11 @@ class _RegisterStep2ScreenState extends ConsumerState<RegisterStep2Screen> {
 
   Widget _card(List<CollectionRoute> routes, bool isLoading) {
     return Container(
+      key: _cardKey,
+      clipBehavior: Clip.antiAlias,
       decoration: const BoxDecoration(
         color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
           BoxShadow(color: Color(0x1A000000), blurRadius: 30, offset: Offset(0, 10)),
         ],
@@ -250,16 +333,16 @@ class _RegisterStep2ScreenState extends ConsumerState<RegisterStep2Screen> {
                 const SizedBox(height: 16),
                 _RoutesSection(
                   routes: routes,
-                  selectedId: _selectedRouteId,
-                  onSelect: (id) {
-                    setState(() => _selectedRouteId = id);
-                    final route = routes.firstWhere((r) => r.id == id);
-                    if (route.nodes.isNotEmpty) {
-                      _mapController.move(
-                        LatLng(route.nodes.first.lat, route.nodes.first.lng),
-                        14,
-                      );
-                    }
+                  addedIds: _addedRouteIds,
+                  visualizedId: _visualizedRouteId,
+                  onToggleAdd: (id) {
+                    setState(() {
+                      if (!_addedRouteIds.remove(id)) _addedRouteIds.add(id);
+                    });
+                  },
+                  onVisualize: (id) {
+                    setState(() => _visualizedRouteId = id);
+                    _fitRoute(routes.firstWhere((r) => r.id == id));
                   },
                 ),
               ],
@@ -342,6 +425,23 @@ class _RegisterStep2ScreenState extends ConsumerState<RegisterStep2Screen> {
           bottom: 0,
           child: _card(routes, isLoading),
         ),
+        Positioned(
+          right: 16,
+          bottom: _cardHeight + 16,
+          child: Material(
+            color: AppColors.surface,
+            shape: const CircleBorder(),
+            elevation: 4,
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: _recenterOnUser,
+              child: const Padding(
+                padding: EdgeInsets.all(12),
+                child: Icon(Icons.my_location, color: AppColors.primary, size: 24),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -384,10 +484,6 @@ class _AddressField extends StatelessWidget {
         fillColor: AppColors.surfaceContainerLow,
         contentPadding: const EdgeInsets.symmetric(vertical: 14),
         prefixIcon: const Icon(Icons.search, color: AppColors.onSurfaceVariant, size: 20),
-        suffixIcon: IconButton(
-          icon: const Icon(Icons.my_location, color: AppColors.primary, size: 20),
-          onPressed: () {},
-        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide.none,
@@ -407,17 +503,24 @@ class _AddressField extends StatelessWidget {
 
 class _RoutesSection extends StatelessWidget {
   final List<CollectionRoute> routes;
-  final String? selectedId;
-  final void Function(String id) onSelect;
+  final Set<String> addedIds;
+  final String? visualizedId;
+  final void Function(String id) onToggleAdd;
+  final void Function(String id) onVisualize;
 
   const _RoutesSection({
     required this.routes,
-    required this.selectedId,
-    required this.onSelect,
+    required this.addedIds,
+    required this.visualizedId,
+    required this.onToggleAdd,
+    required this.onVisualize,
   });
 
   @override
   Widget build(BuildContext context) {
+    final badge = addedIds.isEmpty
+        ? '${routes.length} Encontradas'
+        : '${addedIds.length} Agregadas';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -440,7 +543,7 @@ class _RoutesSection extends StatelessWidget {
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
-                '${routes.length} Encontradas',
+                badge,
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -450,11 +553,18 @@ class _RoutesSection extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 4),
+        Text(
+          'Toca + para agregar una ruta y toca la tarjeta para verla en el mapa.',
+          style: GoogleFonts.inter(fontSize: 12, color: AppColors.onSurfaceVariant),
+        ),
         const SizedBox(height: 8),
         ...routes.map((route) => _RouteOption(
               route: route,
-              isSelected: selectedId == route.id,
-              onTap: () => onSelect(route.id),
+              isAdded: addedIds.contains(route.id),
+              isVisualized: visualizedId == route.id,
+              onToggleAdd: () => onToggleAdd(route.id),
+              onVisualize: () => onVisualize(route.id),
             )),
       ],
     );
@@ -463,54 +573,43 @@ class _RoutesSection extends StatelessWidget {
 
 class _RouteOption extends StatelessWidget {
   final CollectionRoute route;
-  final bool isSelected;
-  final VoidCallback onTap;
+  final bool isAdded;
+  final bool isVisualized;
+  final VoidCallback onToggleAdd;
+  final VoidCallback onVisualize;
 
   const _RouteOption({
     required this.route,
-    required this.isSelected,
-    required this.onTap,
+    required this.isAdded,
+    required this.isVisualized,
+    required this.onToggleAdd,
+    required this.onVisualize,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: onVisualize,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isSelected
+          color: isVisualized
               ? AppColors.primaryContainer.withValues(alpha: 0.1)
               : AppColors.surface,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? AppColors.primary : AppColors.surfaceContainerHighest,
-            width: isSelected ? 2 : 1,
+            color: isVisualized ? AppColors.primary : AppColors.surfaceContainerHighest,
+            width: isVisualized ? 2 : 1,
           ),
-          boxShadow: isSelected
+          boxShadow: isVisualized
               ? const [BoxShadow(color: Color(0x0D000000), blurRadius: 4, offset: Offset(0, 2))]
               : null,
         ),
         child: Row(
           children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isSelected
-                    ? AppColors.primaryContainer
-                    : AppColors.surfaceContainerHigh,
-              ),
-              child: Icon(
-                Icons.route,
-                size: 20,
-                color: isSelected ? AppColors.onPrimaryContainer : AppColors.onSurfaceVariant,
-              ),
-            ),
+            _AddRouteButton(isAdded: isAdded, onTap: onToggleAdd),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -560,13 +659,46 @@ class _RouteOption extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Icon(
-                  Icons.check_circle,
+                  Icons.visibility,
                   size: 20,
-                  color: isSelected ? AppColors.primary : Colors.transparent,
+                  color: isVisualized ? AppColors.primary : Colors.transparent,
                 ),
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Botón circular "+" a la izquierda de cada ruta para agregarla/quitarla
+/// del conjunto que se guardará (independiente de la visualización en el mapa).
+class _AddRouteButton extends StatelessWidget {
+  final bool isAdded;
+  final VoidCallback onTap;
+
+  const _AddRouteButton({required this.isAdded, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: isAdded ? AppColors.primary : AppColors.surfaceContainerHigh,
+          border: Border.all(
+            color: isAdded ? AppColors.primary : AppColors.surfaceContainerHighest,
+          ),
+        ),
+        child: Icon(
+          isAdded ? Icons.check : Icons.add,
+          size: 22,
+          color: isAdded ? AppColors.onPrimary : AppColors.primary,
         ),
       ),
     );

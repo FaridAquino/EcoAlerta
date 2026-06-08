@@ -34,4 +34,11 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<void> logout() => _datasource.clearSession();
+
+  @override
+  Future<User?> getCurrentUser() async {
+    final data = await _datasource.getCurrentUser();
+    if (data == null) return null;
+    return User.fromMap(data['email'] as String, data);
+  }
 }
